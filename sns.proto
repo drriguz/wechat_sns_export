@@ -5,8 +5,8 @@ message SnsTimeline {
   required string author_wxid = 5;
   required string author_name = 6;
   required int32  create_time = 7;
-  required int32  like_count = 12;
-  required bytes  like_detail = 13;
+  required int32  favorite_count = 12;
+  required bytes  favorite_detail = 13;
   required int32  comment_count = 14;
   required bytes  comment_detail = 15;
   required string content = 23;

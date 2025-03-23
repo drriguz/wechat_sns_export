@@ -24,7 +24,7 @@ _sym_db = _symbol_database.Default()
 
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\tsns.proto\"\xc1\x01\n\x0bSnsTimeline\x12\n\n\x02id\x18\x02 \x02(\t\x12\x13\n\x0b\x61uthor_wxid\x18\x05 \x02(\t\x12\x13\n\x0b\x61uthor_name\x18\x06 \x02(\t\x12\x13\n\x0b\x63reate_time\x18\x07 \x02(\x05\x12\x12\n\nlike_count\x18\x0c \x02(\x05\x12\x13\n\x0blike_detail\x18\r \x02(\x0c\x12\x15\n\rcomment_count\x18\x0e \x02(\x05\x12\x16\n\x0e\x63omment_detail\x18\x0f \x02(\x0c\x12\x0f\n\x07\x63ontent\x18\x17 \x02(\t')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\tsns.proto\"\xc9\x01\n\x0bSnsTimeline\x12\n\n\x02id\x18\x02 \x02(\t\x12\x13\n\x0b\x61uthor_wxid\x18\x05 \x02(\t\x12\x13\n\x0b\x61uthor_name\x18\x06 \x02(\t\x12\x13\n\x0b\x63reate_time\x18\x07 \x02(\x05\x12\x16\n\x0e\x66\x61vorite_count\x18\x0c \x02(\x05\x12\x17\n\x0f\x66\x61vorite_detail\x18\r \x02(\x0c\x12\x15\n\rcomment_count\x18\x0e \x02(\x05\x12\x16\n\x0e\x63omment_detail\x18\x0f \x02(\x0c\x12\x0f\n\x07\x63ontent\x18\x17 \x02(\t')
 
 _globals = globals()
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, _globals)
@@ -32,5 +32,5 @@ _builder.BuildTopDescriptorsAndMessages(DESCRIPTOR, 'sns_pb2', _globals)
 if not _descriptor._USE_C_DESCRIPTORS:
   DESCRIPTOR._loaded_options = None
   _globals['_SNSTIMELINE']._serialized_start=14
-  _globals['_SNSTIMELINE']._serialized_end=207
+  _globals['_SNSTIMELINE']._serialized_end=215
 # @@protoc_insertion_point(module_scope)
