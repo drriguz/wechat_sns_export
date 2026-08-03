@@ -3,3 +3,5 @@ __pycache__
 decrypted/
 .venv/
 .DS_Store
+migration/
+session-*.md

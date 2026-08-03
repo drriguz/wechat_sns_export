@@ -216,6 +216,99 @@ def parse_timeline_xml(content_xml):
         "is_private": tl.findtext("private", "0") == "1",
         "location": location,
         "media": _parse_media_list(tl),
+        "link": _parse_link_card(tl, content_type),
+        "finder": _parse_finder_feed(tl),
+        "likes": _parse_user_comments(root, "like_user_list", 1),
+        "comments": _parse_user_comments(root, "comment_user_list", 2),
+    }
+
+
+def _parse_user_comments(root, list_path, want_type):
+    """Parse interactions embedded in the post XML.
+
+    Every post carries its full like/comment list in the XML
+    (like_user_list / comment_user_list). Replies reference their target via
+    ref_comment_id / ref_username, so the target nickname is resolved from the
+    comment list itself. Withdrawn interactions (b_deleted != 0) are skipped.
+    """
+    entries = []
+    for uc in root.findall(f".//{list_path}/user_comment"):
+        if (uc.findtext("b_deleted", "0") or "0") != "0":
+            continue
+        ctype = int(uc.findtext("type", "0") or 0)
+        if ctype != want_type:
+            continue
+        ctime = int(uc.findtext("create_time", "0") or 0)
+        entries.append({
+            "comment_id": int(uc.findtext("comment_id", "0") or 0),
+            "create_time": ctime,
+            "create_time_str": (
+                datetime.datetime.fromtimestamp(ctime).strftime("%Y-%m-%d %H:%M:%S")
+                if ctime else ""
+            ),
+            "type": ctype,
+            "type_name": "like" if ctype == 1 else "comment",
+            "username": uc.findtext("username", "") or "",
+            "nickname": uc.findtext("nickname", "") or "",
+            "to_username": uc.findtext("ref_username", "") or "",
+            "to_nickname": "",
+            "content": uc.findtext("content", "") or "",
+            "ref_comment_id": int(uc.findtext("ref_comment_id", "0") or 0),
+        })
+    # resolve reply targets: ref_comment_id -> target nickname (only real replies)
+    by_id = {e["comment_id"]: e["nickname"] for e in entries}
+    for e in entries:
+        if e["ref_comment_id"]:
+            e["to_nickname"] = by_id.get(e["ref_comment_id"], "")
+    return entries
+
+
+def _parse_finder_feed(tl):
+    """Flatten 视频号 (WeChat Channels) shared-video card info.
+
+    These posts (content_type 28) carry a <finderFeed> with the account
+    nickname, description, avatar and a media element whose thumbUrl is a
+    downloadable thumbnail and url the actual video.
+    """
+    ff = tl.find(".//finderFeed")
+    if ff is None:
+        return None
+    media = ff.find(".//media")
+    return {
+        "nickname": (ff.findtext("nickname") or "").strip(),
+        "desc": (ff.findtext("desc") or "").strip(),
+        "avatar": (ff.findtext("avatar") or "").strip(),
+        "thumb_url": (media.findtext("thumbUrl") or "").strip() if media is not None else "",
+        "video_url": (media.findtext("url") or "").strip() if media is not None else "",
+    }
+
+
+# content types that render a shared-link card in WeChat
+_LINK_CARD_TYPES = {3, 5}
+
+
+def _parse_link_card(tl, content_type):
+    """Flatten the shared-link card info (link / video-link posts only).
+
+    WeChat shows these as a card: title, description (e.g. "UP主: ...") and
+    the source app ("来自 哔哩哔哩"). Extracted from ContentObject/description
+    and appInfo/appName so the UI doesn't need the raw XML. Normal image/text
+    posts must NOT get a card (their mediaList thumbs would match the generic
+    selectors), hence the content_type gate.
+    """
+    if content_type not in _LINK_CARD_TYPES:
+        return None
+    title = (tl.findtext(".//ContentObject/title") or "").strip()
+    desc = (tl.findtext(".//ContentObject/mediaList/media/description") or "").strip()
+    source = (tl.findtext(".//appInfo/appName") or "").strip()
+    thumb = (tl.findtext(".//ContentObject/mediaList/media/thumb") or "").strip()
+    if not (title or desc or source or thumb):
+        return None
+    return {
+        "title": title,
+        "description": desc,
+        "source": source,
+        "thumb_url": thumb,
     }
 
 
@@ -301,6 +394,14 @@ def main(argv=None):
             if parsed is None:
                 parse_failures += 1
                 continue
+            xml_likes = parsed.get("likes") or []
+            xml_comments = parsed.get("comments") or []
+            if xml_likes or xml_comments:
+                # the XML carries the full interaction list
+                likes, comments = xml_likes, xml_comments
+            else:
+                likes = [i for i in interactions.get(tid, []) if i["type"] == 1]
+                comments = [i for i in interactions.get(tid, []) if i["type"] != 1]
             post = {
                 "tid": tid,
                 "id": parsed["id"],
@@ -314,8 +415,10 @@ def main(argv=None):
                 "is_private": parsed["is_private"],
                 "location": parsed["location"],
                 "media": parsed["media"],
-                "likes": [i for i in interactions.get(tid, []) if i["type"] == 1],
-                "comments": [i for i in interactions.get(tid, []) if i["type"] != 1],
+                "likes": likes,
+                "comments": comments,
+                "link": parsed.get("link"),
+                "finder": parsed.get("finder"),
                 "pack_info_buf": pack_info_buf or "",
             }
             if not args.no_raw:

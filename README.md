@@ -230,6 +230,47 @@ Result on this machine: 5608/5918 decrypted (5395 jpg, 211 mp4, 2 png, ~984 MB);
 208 md5 matches, 980 mismatches (re-encoded originals), 310 skipped — media
 without a key in the XML (`key="0"`, thumbnails of old video posts).
 
+## Step 5: browse it as a WeChat Moments web app
+
+A React + TypeScript + Tailwind frontend with a Flask + SQLite backend that
+renders the exported posts as a WeChat Moments (朋友圈) timeline.
+
+```bash
+# 1. ingest the JSON export into SQLite
+.venv/bin/python backend/ingest.py          # -> decrypted/sns.sqlite
+
+# 2. start the API (http://127.0.0.1:5001)
+.venv/bin/python backend/app.py
+
+# 3. start the frontend (http://localhost:5174)
+cd frontend && npm install && npm run dev
+```
+
+Layout:
+
+```
+backend/
+    ingest.py   JSON -> SQLite (posts, media tables; media resolved to files)
+    app.py      Flask API + media file serving
+frontend/       Vite + React + TS + Tailwind (WeChat Moments UI)
+isaac_keystream.mjs   WASM keystream driver (used by decrypt_media.py)
+```
+
+API:
+
+| Endpoint | Description |
+|---|---|
+| `GET /api/posts?page=1&page_size=10&search=kw` | paginated posts (newest first), content/nickname search |
+| `GET /api/posts/<tid>` | single post |
+| `GET /api/stats` | post/media counts |
+| `GET /media/<file>` | decrypted media (thumbnails `*_t.jpg`) |
+
+UI features: infinite-scroll pagination, search-as-you-type (Enter), WeChat
+**Album (相册)** layout — date on the left, images on top, content below;
+long text is collapsed with a 全文 (expand) toggle; link posts render as a
+clickable link card; video thumbs with play icon + fullscreen lightbox
+(keyboard arrows); likes/comments in the classic gray box; location pins.
+
 ## How the encryption works
 
 ### Encryption parameters (WeChat 4.x)
@@ -336,4 +377,4 @@ cd wechat-decrypt && sudo ./find_all_keys_macos
 - [x] Export `SnsTimeLine` rows to plain JSON
 - [x] Download SNS media from CDN (kept encrypted, with manifest & checksum tracking)
 - [x] Decrypt CDN media (ISAAC-64 via WeChat's official WASM module)
-- [ ] Render a browsable gallery / HTML export of posts + media
+- [x] WeChat Moments web reader (React + Tailwind, Flask + SQLite, pagination & search)
