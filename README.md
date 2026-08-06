@@ -271,6 +271,68 @@ long text is collapsed with a 全文 (expand) toggle; link posts render as a
 clickable link card; video thumbs with play icon + fullscreen lightbox
 (keyboard arrows); likes/comments in the classic gray box; location pins.
 
+## Step 6: migrate the archive into a cryptowl vault
+
+The final destination is your own encrypted vault app (cryptowl). The desktop
+tooling in this repo — `vaultlib/` — is the **reference implementation of the
+cryptowl vault design** ([docs/design.md](../cryptowl/docs/design.md)):
+key hierarchy (Argon2id/HKDF/HMAC/AES-256-GCM), `vault.meta` + `config.sig`,
+SQLCipher raw key, and the moments feature schema
+([docs/moments.md](../cryptowl/docs/moments.md)). It is byte-exact with the
+Android implementation for cross-verification (fixed test vectors in
+`tests/test_vaultlib.py`).
+
+Workflow: create/borrow a vault, migrate into it, copy it back to Android.
+
+```bash
+# 1. create a vault (needs: python3 -m venv .venv; pip install -r requirements.txt)
+.venv/bin/python -m vaultlib create ../vaults/personal \
+    --vault-id personal --name "我的珍藏" --password <master-password>
+
+# 2. migrate the WeChat export into it (opens the vault, verifies integrity,
+#    encrypts media with FEK into attachments/ + thumbnails/, fills the DB)
+.venv/bin/python migrate_moments.py --vault ../vaults/personal \
+    --password <master-password> \
+    --json decrypted/sns_export.json --media decrypted/media_decrypted
+
+# 3. inspect the result
+.venv/bin/python -m vaultlib info ../vaults/personal --password <master-password>
+```
+
+Result on this machine (2418 posts): 2418 moments, 1040 cards, 2780 media,
+7497 comments, 6715 likes; 960 MB of FEK-encrypted `.cwo` files in
+`attachments/` + 25 MB thumbnails. Re-running the migration is a no-op
+(idempotent by WeChat `source_id`).
+
+### Vault tooling
+
+```
+vaultlib/                  desktop reference implementation of the cryptowl vault
+    vault.py               create/open: key derivation, vault.meta, config.sig,
+                           SQLCipher raw-key connection, FEK
+    crypto.py              Argon2id / HKDF-SHA256 / HMAC-SHA256 / AES-256-GCM
+    crockford32.py         Crockford Base32 (byte-exact with the Android impl)
+    sqlcipher_db.py        ctypes binding to libsqlcipher (brew install sqlcipher)
+    cli.py                 `create` / `info` / `verify` commands
+migrate_moments.py         WeChat export JSON + decrypted media -> vault
+tests/                     unit + integration tests (fixed cross-verification
+                           vectors for the Android implementation)
+```
+
+Notes:
+
+- **Device Secret** — the design stores it in Android Keystore; on desktop it
+  is a 32-byte `<vault>/device_secret` file (mode 600). When moving a
+  desktop-created vault to Android, the app must re-bind it once (unwrap
+  `vault_key:smk` with the desktop SMK, re-wrap with the Android SMK, delete
+  the file) — the design's "re-bind on import" flow.
+- **Media files** are encrypted with FEK = `HKDF-SHA256(VaultKey, info="file")`
+  as CWO1 blobs (whole-file AES-256-GCM for images/audio, chunked 64 KiB GCM
+  for video; AAD = media row id) — see [docs/moments.md](../cryptowl/docs/moments.md) §4.
+- **Requirements** for the migration path: `pip install argon2-cffi
+  pycryptodome` plus `brew install sqlcipher` (or set `LIBSQLCIPHER`).
+  `--password-file` is supported for the master password.
+
 ## How the encryption works
 
 ### Encryption parameters (WeChat 4.x)
@@ -378,3 +440,4 @@ cd wechat-decrypt && sudo ./find_all_keys_macos
 - [x] Download SNS media from CDN (kept encrypted, with manifest & checksum tracking)
 - [x] Decrypt CDN media (ISAAC-64 via WeChat's official WASM module)
 - [x] WeChat Moments web reader (React + Tailwind, Flask + SQLite, pagination & search)
+- [x] Cryptowl vault tooling (`vaultlib/`) + moments migration (`migrate_moments.py`)
